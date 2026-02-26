@@ -9,7 +9,7 @@ This directory contains vignettes and tutorials for running PanGenie on paired W
 
 We are genotyping **474 GEUVADIS samples** across **5 pangenome reference panels** to evaluate:
 
-- **Panel size effect**: how haplotype diversity (64 → 88 → 214 haplotypes) impacts genotyping quality
+- **Panel size effect**: how haplotype diversity (64, 88, 214, 464 haplotypes) impacts genotyping quality
 - **Reference genome effect**: GRCh38 vs chm13v2.0 (masked and unmasked) as the coordinate system
 - **eQTL discovery power**: whether pangenome-derived genotypes improve eQTL detection over standard linear reference calls
 - **Cross-panel concordance**: genotype agreement across panels for the same samples
@@ -19,8 +19,8 @@ We are genotyping **474 GEUVADIS samples** across **5 pangenome reference panels
 | hgsvc_nhap_64_hg38 | GRCh38 | 64 | Benchmark run in progress (Ebert et al. graph) |
 | hprc_r1_nhap_88_chm13 | chm13v2.0 (masked) | 88 | Indexing complete |
 | hgsvc3_hprc_r1_nhap_214_chm13 | chm13v2.0 (unmasked) | 214 | Indexing complete |
-| hprc_v2.0_mc_chm13 | chm13v2.0 (masked) | — | eQTL analysis available |
-| hprc_v2.0_mc_grch38 | GRCh38 | — | eQTL analysis available |
+| hprc_v2.0_mc_chm13 | chm13v2.0 (masked) | 464 | eQTL analysis available |
+| hprc_v2.0_mc_grch38 | GRCh38 | 464 | eQTL analysis available |
 
 ---
 
@@ -28,31 +28,31 @@ We are genotyping **474 GEUVADIS samples** across **5 pangenome reference panels
 
 ```mermaid
 flowchart TD
-    A([Panel VCF\n.vcf.gz]) --> V
-    B([Reference FASTA\n.fa]) --> V
+    A([Panel VCF .vcf.gz]) --> V
+    B([Reference FASTA .fa]) --> V
     B --> M
     B --> PP
 
     subgraph VCF_PREP["VCF Preprocessing (per panel, once)"]
-        V[validate_vcf\nbcftools norm --check-ref e]
-        V --> PR[prepare_vcf\nfilter >20% missing · N ALTs]
-        PR --> ID[add_ids\nassign unique variant IDs]
-        ID --> N[normalize\nbcftools norm -m- → biallelic]
-        N --> C1[compress_vcf\nbgzip + tabix]
-        N --> M[merge_haplotypes\nmerge_vcfs.py · reconstruct haplotypes]
+        V["validate_vcf<br/>bcftools norm --check-ref e"]
+        V --> PR["prepare_vcf<br/>filter >20% missing · N ALTs"]
+        PR --> ID["add_ids<br/>assign unique variant IDs"]
+        ID --> N["normalize<br/>bcftools norm -m- to biallelic"]
+        N --> C1["compress_vcf<br/>bgzip + tabix"]
+        N --> M["merge_haplotypes<br/>merge_vcfs.py · reconstruct haplotypes"]
     end
 
     subgraph INDEX["Indexing (per panel, once)"]
-        M --> PP[pangenie_preprocessing\nPanGenie-index\n24 threads · 200 GB · ~43 min]
+        M --> PP["pangenie_preprocessing<br/>PanGenie-index<br/>24 threads · 200 GB · ~43 min"]
     end
 
-    subgraph GENOTYPE["Genotyping (per sample × 474)"]
-        S([Sample FASTA\n.fa]) --> PG
+    subgraph GENOTYPE["Genotyping (per sample x 474)"]
+        S([Sample FASTA .fa]) --> PG
         C1 --> PG
-        PP --> PG[pangenie_genotyping\nPanGenie\n24 threads · 200 GB · up to 4 hrs]
-        PG --> CB[convert_back_biallelic\nconvert-to-biallelic.py]
-        CB --> C2[compress_vcf\nbgzip + tabix]
-        CB --> CO[convert_back_original\nbcftools norm -m+]
+        PP --> PG["pangenie_genotyping<br/>PanGenie<br/>24 threads · 200 GB · up to 4 hrs"]
+        PG --> CB["convert_back_biallelic<br/>convert-to-biallelic.py"]
+        CB --> C2["compress_vcf<br/>bgzip + tabix"]
+        CB --> CO["convert_back_original<br/>bcftools norm -m+"]
     end
 
     CO --> OUT([genotypes/sample-genotypes.vcf])
@@ -98,20 +98,11 @@ A step-by-step guide for genotyping GEUVADIS samples using PanGenie v4.2.1 with 
 - bcftools, bgzip, tabix, samtools, aria2c in PATH
 - conda base environment with pyfaidx
 
-**PanGenie container:**
-```
-/path/to/pangenie.sif
-```
-```bash
-singularity exec -B /path/to/data/ pangenie.sif PanGenie-index --help
-```
-
 ---
 
 ### Step 1: Reference Genome
 
 ```bash
-# GRCh38 with decoy (for CRAM decoding)
 wget -O GRCh38_full_analysis_set_plus_decoy_hla.fa \
   http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/GRCh38_reference_genome/GRCh38_full_analysis_set_plus_decoy_hla.fa
 ```
@@ -121,15 +112,16 @@ wget -O GRCh38_full_analysis_set_plus_decoy_hla.fa \
 ### Step 2: Pangenome VCF
 
 ```bash
-# HPRC v2.0 GRCh38 panel
-wget hprc-v2.0-mc-grch38.pgin.vcf.gz
+aws s3 cp --no-sign-request \
+  s3://human-pangenomics/pangenomes/scratch/2025_02_28_minigraph_cactus/hprc-v2.0-mc-grch38/hprc-v2.0-mc-grch38.pgin.vcf.gz \
+  .
 ```
 
 ---
 
-### Step 3: CRAM → FASTA Conversion
+### Step 3: CRAM to FASTA Conversion
 
-Prepare a sample manifest (`sample_data.csv`):
+Prepare a sample manifest (`igsr-illumina-phase3-geuvadis-samples.csv`):
 ```
 sample_id,cram_url,md5sum
 NA12778,ftp://ftp.sra.ebi.ac.uk/vol1/run/ERR323/ERR3239484/NA12778.final.cram,b03ae320c1a3b13c750d23d28a8dbc13
@@ -150,7 +142,7 @@ aria2c \
   "${CRAM_URL}"
 ```
 
-Convert CRAM → merged FASTA (R1 + R2 interleaved, PanGenie input format):
+Convert CRAM to merged FASTA (R1 + R2 interleaved, PanGenie input format):
 ```bash
 samtools fastq \
   -@ "${THREADS}" \
@@ -160,8 +152,6 @@ samtools fastq \
   | awk 'NR%4==1{printf ">%s\n", substr($0,2)} NR%4==2{print}' \
   > "${SAMPLE_ID}.fa"
 ```
-
-> For large cohorts, run as a SLURM array job to parallelize across samples.
 
 ---
 
@@ -185,23 +175,23 @@ snakemake --configfile config_hprc_v2.0_mc_grch38.yaml --profile slurm --nolock 
   > slurm_logs/snakemake_hprc_v2.0_mc_grch38.out 2>&1
 ```
 
-> **Note:** Snakemake 7 cluster mode exits after each job batch. Simply rerun the same command to continue — `rerun-incomplete: true` ensures it picks up exactly where it left off.
+**Note:** Snakemake 7 cluster mode exits after each job batch. Simply rerun the same command to continue — `rerun-incomplete: true` ensures it picks up exactly where it left off.
 
 **Pipeline steps:**
 
 | # | Rule | Output | Description |
 |---|---|---|---|
 | 1 | validate_vcf | `input-vcf/validate-vcf.log` | bcftools REF allele check |
-| 2 | prepare_vcf | `input-vcf/input-missing-removed.vcf` | Filter >20% missing genotypes and N ALT alleles |
+| 2 | prepare_vcf | `input-vcf/input-missing-removed.vcf` | Filter greater than 20% missing genotypes and N ALT alleles |
 | 3 | add_ids | `input-vcf/callset.vcf.gz` | Assign unique IDs to all alleles |
-| 4 | normalize | `input-vcf/callset-biallelic.vcf` | Split multiallelic → biallelic |
+| 4 | normalize | `input-vcf/callset-biallelic.vcf` | Split multiallelic to biallelic |
 | 5 | compress_vcf | `input-vcf/callset-biallelic.vcf.gz` | bgzip + tabix |
 | 6 | merge_haplotypes | `pangenome/pangenome.vcf` | Reconstruct haplotype sequences for PanGenie |
 | 7 | pangenie_preprocessing | `pangenie/indexing/` | Build kmer index (PanGenie-index, 24 threads, 200GB) |
 | 8 | pangenie_genotyping | `pangenie/<sample>_graph_genotyping.vcf` | Genotype sample (PanGenie, 24 threads, 200GB) |
 | 9 | convert_back_biallelic | `pangenie/<sample>_genotypes-biallelic.vcf` | Map back to biallelic representation |
 | 10 | compress_vcf | `pangenie/<sample>_genotypes-biallelic.vcf.gz` | bgzip + tabix |
-| 11 | convert_back_original | `genotypes/<sample>-genotypes.vcf` | Merge biallelic → multiallelic (bcftools norm -m+) |
+| 11 | convert_back_original | `genotypes/<sample>-genotypes.vcf` | Merge biallelic back to multiallelic (bcftools norm -m+) |
 
 **Monitor:**
 ```bash
