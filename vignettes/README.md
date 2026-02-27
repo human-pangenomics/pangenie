@@ -88,7 +88,7 @@ results/
 
 ## GEUVADIS GRCh38 Analysis
 
-A step-by-step guide for genotyping GEUVADIS samples using PanGenie v4.2.1 with the GRCh38 reference genome and the HPRC v2.0 pangenome panel.
+A workshop guide for genotyping GEUVADIS samples using PanGenie v4.2.1 with the GRCh38 reference genome and the HPRC v2.0 pangenome panel.
 
 ### Prerequisites
 
